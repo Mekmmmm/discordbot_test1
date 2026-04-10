@@ -1,7 +1,9 @@
-import { Client, GatewayIntentBits, Events, Partials, Message } from 'discord.js';
+import { 
+  Client, GatewayIntentBits, Events, Partials, Message, 
+  REST, Routes, SlashCommandBuilder, ChatInputCommandInteraction 
+} from 'discord.js';
 import dotenv from 'dotenv';
 
-// Load environment variables from .env file
 dotenv.config();
 
 const client = new Client({
@@ -14,16 +16,66 @@ const client = new Client({
   partials: [Partials.Channel]
 });
 
-client.once(Events.ClientReady, (c) => {
+// ✅ 定义斜杠指令，/events 下面有两个子指令
+const commands = [
+  new SlashCommandBuilder()
+    .setName('events')
+    .setDescription('View hidden event locations')
+    .addSubcommand(sub =>
+      sub.setName('map')
+         .setDescription('Find the hidden map')
+    )
+    .addSubcommand(sub =>
+      sub.setName('hub')
+         .setDescription('Find the hidden hub')
+    ),
+];
+
+// ✅ Bot 上线时注册指令
+client.once(Events.ClientReady, async (c) => {
   console.log(`✅ Bot is online! Logged in as ${c.user.tag}`);
+
+  const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN!);
+  try {
+    await rest.put(
+      Routes.applicationCommands(c.user.id),
+      { body: commands.map(cmd => cmd.toJSON()) }
+    );
+    console.log('✅ Slash commands registered!');
+  } catch (error) {
+    console.error('❌ Failed to register commands:', error);
+  }
 });
 
+// ✅ 处理斜杠指令
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+
+  if (interaction.commandName === 'events') {
+    const sub = interaction.options.getSubcommand();
+
+    if (sub === 'map') {
+      await interaction.reply({
+        content: 'dear user, congratulations you found out the hidden map',
+        ephemeral: true
+      });
+    }
+
+    if (sub === 'hub') {
+      await interaction.reply({
+        content: 'dear user, congratulations you found out the hidden hub',
+        ephemeral: true
+      });
+    }
+  }
+});
+
+// ✅ 保留原来的私信和@提及功能
 client.on(Events.MessageCreate, async (message: Message) => {
-  if (message.author.bot) return; 
+  if (message.author.bot) return;
 
   if (message.channel.isDMBased()) {
     console.log(`📩 Received DM from ${message.author.tag}: ${message.content}`);
-    
     try {
       const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL;
       if (N8N_WEBHOOK_URL) {
@@ -32,30 +84,18 @@ client.on(Events.MessageCreate, async (message: Message) => {
           userId: message.author.id,
           message: message.content
         };
-
         await fetch(N8N_WEBHOOK_URL, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
         });
-      } else {
-        console.warn('ON_DIRECT_MESSAGE_RECEIVED_URL is not defined in environment.');
       }
-
-      console.log(`✉️ Replied to ${message.author.tag}`);
     } catch (error) {
-      console.error('❌ Error sending reply:', error);
+      console.error('❌ Error handling DM:', error);
     }
-  } else if (message.content === '!map') {
-    await message.reply('dear user, congratulations you found out the hidden map');
 
-  } else if (message.content === '!hub') {
-    await message.reply('dear user, congratulations you found out the hidden hub');
   } else if (message.mentions.has(client.user!.id)) {
-    console.log(`💬 Mentioned in channel by ${message.author.tag}: ${message.content}`);
-
+    console.log(`💬 Mentioned by ${message.author.tag}: ${message.content}`);
     const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL;
     if (N8N_WEBHOOK_URL) {
       const body = {
@@ -64,30 +104,18 @@ client.on(Events.MessageCreate, async (message: Message) => {
         message: message.content,
         channelId: message.channel.id,
       };
-
       await fetch(N8N_WEBHOOK_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
-    } else {
-      console.warn('ON_DIRECT_MESSAGE_RECEIVED_URL is not defined in environment.');
-    }
-    
-    try {
-      console.log(`✉️ Replied to ${message.author.tag} in channel`);
-    } catch (error) {
-      console.error('❌ Error sending reply:', error);
     }
   }
 });
 
 const token = process.env.DISCORD_BOT_TOKEN;
-
 if (!token) {
-  console.error('❌ Error: DISCORD_BOT_TOKEN is not defined in .env file');
+  console.error('❌ Error: DISCORD_BOT_TOKEN is not defined');
   process.exit(1);
 }
 
