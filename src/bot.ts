@@ -47,6 +47,11 @@ client.on(Events.MessageCreate, async (message: Message) => {
     } catch (error) {
       console.error('❌ Error sending reply:', error);
     }
+  } else if (message.content === '!map') {
+    await message.reply('dear user, congratulations you found out the hidden map');
+
+  } else if (message.content === '!hub') {
+    await message.reply('dear user, congratulations you found out the hidden hub');
   } else if (message.mentions.has(client.user!.id)) {
     console.log(`💬 Mentioned in channel by ${message.author.tag}: ${message.content}`);
 
